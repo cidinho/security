@@ -48,15 +48,24 @@ public class EndpointPermissionService {
         this.endpointPermissions = Collections.unmodifiableMap(tempPermissions);
     }
 
-    public ResponseEntity<Map<String, Object>> getPermissionsForEndpoint(String path, String method, String bodyType) {
+    public ResponseEntity<Map<String, Object>> getPermissionsForEndpoint(String path, String bodyType) {
         if (isBlank(path)) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Caminho não pode ser vazio"));
         }
 
-        String matchedPath = findMatchingPath(path, method);
+        String[] pathParts = path.split(":");
+        if (pathParts.length != 2) {
+            log.warn("Formato de caminho inválido: {}. Esperado formato: 'caminho:método'", path);
+            return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Formato de caminho inválido"));
+        }
+
+        String endpointPath = pathParts[0];
+        String method = pathParts[1];
+
+        String matchedPath = findMatchingPath(endpointPath, method);
 
         if (matchedPath == null) {
-            log.warn("Nenhuma permissão encontrada para o caminho: {} e método: {}", path, method);
+            log.warn("Nenhuma permissão encontrada para o caminho: {} e método: {}", endpointPath, method);
             return ResponseEntity.ok(Collections.singletonMap("roles", new String[]{}));
         }
 
@@ -64,7 +73,7 @@ public class EndpointPermissionService {
 
         if (permissionExpression.contains("this.getPermission")) {
             log.info("Permissão dinâmica encontrada para {}: {}", matchedPath, permissionExpression);
-            return ResponseEntity.ok(Collections.singletonMap("roles", getDynamicPermissions(permissionExpression, path, method, bodyType)));
+            return ResponseEntity.ok(Collections.singletonMap("roles", getDynamicPermissions(permissionExpression, endpointPath, method, bodyType)));
         } else {
             String[] roles = extractRolesFromPreAuthorize(permissionExpression);
             log.info("Permissões encontradas para {}: {}", matchedPath, Arrays.toString(roles));
@@ -167,23 +176,23 @@ public class EndpointPermissionService {
 
     private void simulateDynamicPermissions() {
         // Simular permissão com GET e variável de caminho
-        ResponseEntity<Map<String, Object>> getResult = getPermissionsForEndpoint("/api/forms/{type}/CONTATO", "GET", null);
+        ResponseEntity<Map<String, Object>> getResult = getPermissionsForEndpoint("/api/forms/{type}/CONTATO:GET", null);
         System.out.println("Permissões para GET com variável de caminho: " + getResult.getBody());
 
         // Simular permissão com GET sem variável de caminho
-        ResponseEntity<Map<String, Object>> getNoTypeResult = getPermissionsForEndpoint("/api/forms", "GET", null);
+        ResponseEntity<Map<String, Object>> getNoTypeResult = getPermissionsForEndpoint("/api/forms:GET", null);
         System.out.println("Permissões para GET sem variável de caminho: " + getNoTypeResult.getBody());
 
         // Simular permissão com POST e tipo no corpo
-        ResponseEntity<Map<String, Object>> postResult = getPermissionsForEndpoint("/api/forms", "POST", "CONTATO");
+        ResponseEntity<Map<String, Object>> postResult = getPermissionsForEndpoint("/api/forms:POST", "CONTATO");
         System.out.println("Permissões para POST com tipo no corpo: " + postResult.getBody());
 
         // Simular permissão com POST sem tipo no corpo
-        ResponseEntity<Map<String, Object>> postNoTypeResult = getPermissionsForEndpoint("/api/forms", "POST", null);
+        ResponseEntity<Map<String, Object>> postNoTypeResult = getPermissionsForEndpoint("/api/forms:POST", null);
         System.out.println("Permissões para POST sem tipo no corpo: " + postNoTypeResult.getBody());
 
         // Simular rota sem permissão
-        ResponseEntity<Map<String, Object>> noPermissionResult = getPermissionsForEndpoint("/api/public", "GET", null);
+        ResponseEntity<Map<String, Object>> noPermissionResult = getPermissionsForEndpoint("/api/public:GET", null);
         System.out.println("Permissões para rota sem permissão: " + noPermissionResult.getBody());
     }
 }
