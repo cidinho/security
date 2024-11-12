@@ -1,0 +1,40 @@
+import java.util.Map;
+
+private String[] getDynamicPermissions(String permissionExpression, String matchedPath, String path, String method, Object bodyType) {
+    String typeParam = extractTypeParamFromExpression(permissionExpression);
+    if (typeParam == null) {
+        log.warn("Não foi possível extrair o parâmetro de tipo da expressão: {}", permissionExpression);
+        return new String[]{};
+    }
+
+    // Tratamento para requisições GET
+    if ("GET".equalsIgnoreCase(method)) {
+        String pathType = extractTypeFromPath(path, matchedPath + ":GET", typeParam);
+        if (pathType != null) {
+            return new String[]{getPermission(FormTypeEnum.valueOf(pathType))};
+        }
+    }
+    // Tratamento para requisições POST
+    else if ("POST".equalsIgnoreCase(method) && bodyType != null) {
+        String extractedType = extractTypeFromObject(bodyType);
+        if (extractedType != null) {
+            return new String[]{getPermission(FormTypeEnum.valueOf(extractedType))};
+        }
+    }
+
+    // Se não encontrou o tipo no caminho para GET ou não tem bodyType para POST
+    log.info("Tipo não encontrado. Retornando todas as permissões possíveis.");
+    return new String[]{};
+}
+
+private String extractTypeFromObject(Object bodyType) {
+    if (bodyType instanceof Map) {
+        Map<?, ?> bodyMap = (Map<?, ?>) bodyType;
+        Object typeValue = bodyMap.get("type");
+        if (typeValue instanceof String) {
+            return (String) typeValue;
+        }
+    }
+    log.warn("O bodyType não possui o campo 'type' ou não está no formato esperado.");
+    return null;
+}
