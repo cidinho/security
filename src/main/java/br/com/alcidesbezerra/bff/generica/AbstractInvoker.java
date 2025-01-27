@@ -6,8 +6,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import br.com.realizecfi.bsn.abertura.conta.exception.ServerErrorException;
-import br.com.realizecfi.bsn.abertura.conta.domain.Message;
+
 import lombok.AllArgsConstructor;
 /**
  * Esta classe é uma abstração para realizar chamadas a serviços soap de forma mais simples. A ideia é que essa classe
@@ -18,7 +17,6 @@ import lombok.AllArgsConstructor;
  * @param <STUBOUT> Stub de saída da operação
  * @param <HEADER> Headers para a operação. Pode ser um classe própria ou um simples {@code Map<String, String>}
  *
- * Maiores explicações aqui: http://gitlab.lojasrenner.com.br/produtos-financeiros/devops/yeoman-api-generator/-/merge_requests/106
  */
 public abstract class AbstractInvoker<STUBIN, STUBOUT, HEADER> {
 
