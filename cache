@@ -1,0 +1,43 @@
+@Autowired
+private CacheManager cacheManager;
+
+public Single<String[]> getPermissionsForEndpoint(final String requestPath, final String requestMethod, String payload) {
+    return Single.fromCallable(() -> getCachedPermissions(requestPath, requestMethod))
+            .flatMap(cachedPermissions -> {
+                if (cachedPermissions != null) {
+                    return Single.just(cachedPermissions); // Retorna imediatamente se já estiver no cache
+                }
+                return fetchAndCachePermissions(requestPath, requestMethod, payload);
+            })
+            .subscribeOn(Schedulers.io()); // Garante execução assíncrona
+}
+
+private String[] getCachedPermissions(String requestPath, String requestMethod) {
+    Cache cache = cacheManager.getCache("permissionsCache");
+    return cache != null ? cache.get(requestPath + requestMethod, String[].class) : null;
+}
+
+private Single<String[]> fetchAndCachePermissions(String requestPath, String requestMethod, String payload) {
+    return Single.fromCallable(() -> {
+        Map<String, Object> response = getRoles(requestPath, requestMethod, payload);
+        if (response.containsKey("roles")) {
+            Object rolesObject = response.get("roles");
+            if (rolesObject instanceof List) {
+                List<String> rolesList = (List<String>) rolesObject;
+                Log.info("Permissões necessárias para acessar o endpoint {}: {}", requestPath, rolesList);
+
+                String[] permissions = rolesList.toArray(new String[0]);
+                cachePermissions(requestPath, requestMethod, permissions);
+                return permissions;
+            }
+        }
+        return new String[0];
+    });
+}
+
+private void cachePermissions(String requestPath, String requestMethod, String[] permissions) {
+    Cache cache = cacheManager.getCache("permissionsCache");
+    if (cache != null) {
+        cache.put(requestPath + requestMethod, permissions);
+    }
+}
