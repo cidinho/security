@@ -1,6 +1,8 @@
 @Autowired
 private CacheManager cacheManager;
 
+private static final long CACHE_EXPIRATION_TIME = TimeUnit.MINUTES.toMillis(10); // 10 minutos
+
 public Single<String[]> getPermissionsForEndpoint(final String requestPath, final String requestMethod, String payload) {
     return Single.fromCallable(() -> getCachedPermissions(requestPath, requestMethod))
             .flatMap(cachedPermissions -> {
@@ -14,7 +16,20 @@ public Single<String[]> getPermissionsForEndpoint(final String requestPath, fina
 
 private String[] getCachedPermissions(String requestPath, String requestMethod) {
     Cache cache = cacheManager.getCache("permissionsCache");
-    return cache != null ? cache.get(requestPath + requestMethod, String[].class) : null;
+    String cacheKey = requestPath + requestMethod;
+
+    if (cache != null) {
+        // Checar se o cache expirou
+        Cache.ValueWrapper valueWrapper = cache.get(cacheKey);
+        if (valueWrapper != null) {
+            CacheItem cachedItem = (CacheItem) valueWrapper.get();
+            long currentTime = System.currentTimeMillis();
+            if (cachedItem != null && currentTime - cachedItem.timestamp < CACHE_EXPIRATION_TIME) {
+                return cachedItem.permissions; // Retorna as permissões se ainda não expiraram
+            }
+        }
+    }
+    return null; // Cache expirado ou não encontrado
 }
 
 private Single<String[]> fetchAndCachePermissions(String requestPath, String requestMethod, String payload) {
@@ -38,6 +53,19 @@ private Single<String[]> fetchAndCachePermissions(String requestPath, String req
 private void cachePermissions(String requestPath, String requestMethod, String[] permissions) {
     Cache cache = cacheManager.getCache("permissionsCache");
     if (cache != null) {
-        cache.put(requestPath + requestMethod, permissions);
+        String cacheKey = requestPath + requestMethod;
+        CacheItem cacheItem = new CacheItem(permissions, System.currentTimeMillis());
+        cache.put(cacheKey, cacheItem);
+    }
+}
+
+// Classe auxiliar para armazenar permissões e timestamp
+public static class CacheItem {
+    private String[] permissions;
+    private long timestamp;
+
+    public CacheItem(String[] permissions, long timestamp) {
+        this.permissions = permissions;
+        this.timestamp = timestamp;
     }
 }
