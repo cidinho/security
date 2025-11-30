@@ -1,0 +1,17 @@
+<jaxb:bindings
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:jaxb="http://java.sun.com/xml/ns/jaxb"
+    xmlns:xjc="http://java.sun.com/xml/ns/jaxb/xjc"
+    xsi:schemaLocation="http://java.sun.com/xml/ns/jaxb http://java.sun.com/xml/ns/jaxb/bindingschema_2_0.xsd"
+    xmlns:annox="http://annox.dev.java.net"
+    jaxb:version="2.1">
+
+    <jaxb:bindings>
+        <jaxb:globalBindings localScoping="toplevel" generateElementProperty="false">
+            <xjc:simple/>
+            <jaxb:serializable/>
+        </jaxb:globalBindings>
+    </jaxb:bindings>
+
+</jaxb:bindings>

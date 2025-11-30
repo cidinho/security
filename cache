@@ -1,0 +1,66 @@
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import org.springframework.beans.factory.annotation.Autowired;
+import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.schedulers.Schedulers;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+public class PermissionService {
+
+    @Autowired
+    private Cache<String, String[]> permissionsCache;
+
+    private static final long CACHE_EXPIRATION_TIME_MS = 60000; // Tempo de expiração de 1 minuto (em milissegundos)
+
+    public Single<String[]> getPermissionsForEndpoint(final String requestPath, final String requestMethod, String payload) {
+        return Single.fromCallable(() -> getCachedPermissions(requestPath, requestMethod))
+                .flatMap(cachedPermissions -> {
+                    if (cachedPermissions != null) {
+                        return Single.just(cachedPermissions); // Retorna imediatamente se já estiver no cache
+                    }
+                    return fetchAndCachePermissions(requestPath, requestMethod, payload);
+                })
+                .subscribeOn(Schedulers.io()); // Garante execução assíncrona
+    }
+
+    private String[] getCachedPermissions(String requestPath, String requestMethod) {
+        String key = requestPath + requestMethod;
+        return permissionsCache.getIfPresent(key); // Retorna o cache, se estiver presente
+    }
+
+    private Single<String[]> fetchAndCachePermissions(String requestPath, String requestMethod, String payload) {
+        return Single.fromCallable(() -> {
+            Map<String, Object> response = getRoles(requestPath, requestMethod, payload);
+            if (response.containsKey("roles")) {
+                List<String> rolesList = (List<String>) response.get("roles");
+                String[] permissions = rolesList.toArray(new String[0]);
+                cachePermissions(requestPath, requestMethod, permissions);
+                return permissions;
+            }
+            return new String[0];
+        });
+    }
+
+    private void cachePermissions(String requestPath, String requestMethod, String[] permissions) {
+        String key = requestPath + requestMethod;
+        permissionsCache.put(key, permissions); // Armazena o valor no cache
+    }
+
+    // Método de configuração do Cache utilizando Caffeine
+    @Autowired
+    public void configureCache() {
+        permissionsCache = Caffeine.newBuilder()
+                .expireAfterWrite(CACHE_EXPIRATION_TIME_MS, TimeUnit.MILLISECONDS) // Define o tempo de expiração
+                .maximumSize(1000) // Limita o número máximo de entradas no cache
+                .build();
+    }
+
+    // Método fictício para representar a obtenção de roles
+    private Map<String, Object> getRoles(String requestPath, String requestMethod, String payload) {
+        // Aqui você implementaria a lógica para buscar as permissões, de um banco de dados, API, etc.
+        return Map.of("roles", List.of("ROLE_ADMIN", "ROLE_USER"));
+    }
+}

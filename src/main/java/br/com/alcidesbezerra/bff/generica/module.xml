@@ -1,0 +1,9 @@
+<module xmlns="urn:jboss:module:1.1" name="meunamespace">
+    <resources>
+        <resource-root path="meujar.jar"/>
+    </resources>
+    <dependencies>
+        <module name="javax.api"/>
+        <module name="org.jboss.logging"/>
+    </dependencies>
+</module>
