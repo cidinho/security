@@ -1,0 +1,110 @@
+// utilitário de conversão (coloque em uma classe util)
+public final class ResponseConverter {
+
+    private ResponseConverter() {}
+
+    /**
+     * Converte um "javax" Response (ou objeto parecido) para um jakarta.ws.rs.core.Response
+     * usando reflection para evitar dependência direta do tipo javax no compile time.
+     */
+    public static jakarta.ws.rs.core.Response convertToJakarta(Object javaxResponse) {
+        if (javaxResponse == null) return null;
+
+        try {
+            Class<?> cls = javaxResponse.getClass();
+
+            // status
+            int status = 200;
+            try {
+                java.lang.reflect.Method mStatus = cls.getMethod("getStatus");
+                Object s = mStatus.invoke(javaxResponse);
+                if (s instanceof Integer) status = (Integer) s;
+            } catch (NoSuchMethodException ignored) {}
+
+            // entity
+            Object entity = null;
+            try {
+                java.lang.reflect.Method mEntity = cls.getMethod("getEntity");
+                entity = mEntity.invoke(javaxResponse);
+            } catch (NoSuchMethodException ignored) {}
+
+            // headers: pode ser javax.ws.rs.core.MultivaluedMap ou um Map; vamos tratar genericamente
+            java.util.Map<String, java.util.List<Object>> headersMap = new java.util.LinkedHashMap<>();
+            try {
+                java.lang.reflect.Method mGetHeaders = cls.getMethod("getHeaders");
+                Object headersObj = mGetHeaders.invoke(javaxResponse);
+                if (headersObj != null) {
+                    // tenta tratar como Map
+                    if (headersObj instanceof java.util.Map) {
+                        java.util.Map<?,?> raw = (java.util.Map<?,?>) headersObj;
+                        for (java.util.Map.Entry<?,?> e : raw.entrySet()) {
+                            String key = String.valueOf(e.getKey());
+                            Object val = e.getValue();
+                            java.util.List<Object> list = new java.util.ArrayList<>();
+                            if (val instanceof java.util.List) list.addAll((java.util.List) val);
+                            else list.add(val);
+                            headersMap.put(key, list);
+                        }
+                    } else {
+                        // se não for Map, tenta iterar via reflection (entrySet/get)
+                        try {
+                            java.lang.reflect.Method mEntrySet = headersObj.getClass().getMethod("entrySet");
+                            java.lang.Object entrySet = mEntrySet.invoke(headersObj);
+                            java.lang.Iterable<?> it = (java.lang.Iterable<?>) entrySet;
+                            for (Object e : it) {
+                                java.lang.reflect.Method getKey = e.getClass().getMethod("getKey");
+                                java.lang.reflect.Method getValue = e.getClass().getMethod("getValue");
+                                String key = String.valueOf(getKey.invoke(e));
+                                Object val = getValue.invoke(e);
+                                java.util.List<Object> list = new java.util.ArrayList<>();
+                                if (val instanceof java.util.List) list.addAll((java.util.List) val);
+                                else list.add(val);
+                                headersMap.put(key, list);
+                            }
+                        } catch (Exception ex) {
+                            // não conseguimos extrair headers; seguir sem headers
+                        }
+                    }
+                }
+            } catch (NoSuchMethodException ignored) {}
+
+            // media type
+            javax.ws.rs.core.MediaType dummy = null;
+            jakarta.ws.rs.core.MediaType mediaType = null;
+            try {
+                java.lang.reflect.Method mMedia = cls.getMethod("getMediaType");
+                Object mt = mMedia.invoke(javaxResponse);
+                if (mt != null) {
+                    // tenta pegar toString ou construir jakarta MediaType a partir do string
+                    try {
+                        java.lang.reflect.Method mToS = mt.getClass().getMethod("toString");
+                        String mts = (String) mToS.invoke(mt);
+                        mediaType = jakarta.ws.rs.core.MediaType.valueOf(mts);
+                    } catch (Exception ex) {
+                        // fallback ignorar
+                    }
+                }
+            } catch (NoSuchMethodException ignored) {}
+
+            // construir jakarta Response
+            jakarta.ws.rs.core.Response.ResponseBuilder rb = jakarta.ws.rs.core.Response.status(status);
+            if (mediaType != null) rb.type(mediaType);
+            if (entity != null) rb.entity(entity);
+
+            // aplicar headers
+            for (java.util.Map.Entry<String, java.util.List<Object>> e : headersMap.entrySet()) {
+                String name = e.getKey();
+                for (Object v : e.getValue()) {
+                    if (v != null) rb.header(name, v);
+                }
+            }
+
+            return rb.build();
+
+        } catch (RuntimeException re) {
+            throw re;
+        } catch (Exception ex) {
+            throw new RuntimeException("Erro ao converter javax.Response -> jakarta.Response", ex);
+        }
+    }
+}
